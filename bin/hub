@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# hub / anime3d — Shinobi Geek Hub (Three.js) in a dedicated --app window.
+# Fully detached from the terminal; the local server and the browser process exit
+# as soon as the window is closed. Logs: ~/.cache/geek-hub/{gallery,files}.log
+#   hub                  → 3D wallpaper gallery
+#   hub 2 [dossier]      → 3D file explorer of the current folder (or the given one)
+#   hub files [dossier]  → same as `hub 2`
+#   hub --rebuild        → only regenerate gallery thumbnails + gallery.json
+set -u
+HUB="$HOME/.geek-hub"
+CACHE="$HOME/.cache/geek-hub"
+mkdir -p "$CACHE"
+
+mode=gallery
+args=()
+case "${1:-}" in
+    --rebuild)
+        exec python3 -I "$HUB/bin/geek-hub.py" --build-only ;;
+    2|files|-f)
+        mode=files
+        dir=$(realpath -e -- "${2:-$PWD}" 2>/dev/null) && [[ -d $dir ]] \
+            || { echo "Dossier introuvable : ${2:-$PWD}" >&2; exit 1; }
+        args=(--files "$dir") ;;
+    ''|1|gallery) ;;
+    -h|--help)
+        sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    *)
+        echo "Usage : hub [2 [dossier] | --rebuild]   (hub --help)" >&2; exit 1 ;;
+esac
+
+if ! flock -n "$CACHE/$mode.lock" true 2>/dev/null; then
+    if [[ $mode == files ]]; then
+        echo "󰍹  L'explorateur 3D est déjà ouvert — ferme-le (Q) pour l'ouvrir sur un autre dossier."
+    else
+        echo "󰍹  Le Geek Hub est déjà ouvert."
+    fi
+    exit 0
+fi
+
+setsid -f python3 -I "$HUB/bin/geek-hub.py" "${args[@]}" > "$CACHE/$mode.log" 2>&1 < /dev/null
+if [[ $mode == files ]]; then
+    printf '\e[1;32m  Explorateur 3D lancé sur %s\e[0m \e[38;2;108;112;134m(Q ou Ctrl+W pour fermer)\e[0m\n' "${dir/#$HOME/\~}"
+else
+    printf '\e[1;32m󰍹  Geek Hub lancé\e[0m \e[38;2;108;112;134m(fenêtre dédiée — se ferme proprement avec Q ou Ctrl+W)\e[0m\n'
+fi

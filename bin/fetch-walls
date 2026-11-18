@@ -1,0 +1,100 @@
+#!/usr/bin/env bash
+# fetch-walls — secure wallpaper downloader for ~/Downloads/Wallpaper.
+#   fetch-walls -s "rimuru tempest" [N]   search Wallhaven (official public API, SFW anime) → top N (default 3)
+#   fetch-walls URL [URL…]                download the given images
+#   fetch-walls -f list.txt               one URL per line (# comments allowed)
+# Safety: HTTPS only, 25 MB cap, 60 s timeout, staged in a private temp dir,
+# must decode as a real JPEG/PNG/WebP image, never overwrites an existing file.
+# Afterwards `hub --rebuild` (or just `hub`) adds them to the 3D gallery.
+set -euo pipefail
+DEST="${GEEK_HUB_WALLS:-$HOME/Downloads/Wallpaper}"
+UA='shinobi-fetch-walls/1.0'
+mkdir -p "$DEST"
+
+usage() { sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//'; exit 1; }
+
+urls=() names=()
+case "${1:-}" in
+    -s|--search)
+        query=${2:-}; count=${3:-3}
+        [[ -n $query && $count =~ ^[0-9]+$ ]] || usage
+        slug=$(printf '%s' "${query,,}" | tr -c 'a-z0-9' '-' | tr -s '-' | sed 's/^-//; s/-$//')
+        # categories=010 → anime only · purity=100 → SFW only · 16:9, at least Full HD
+        api=$(curl -fsS --proto '=https' --max-time 30 -A "$UA" -G 'https://wallhaven.cc/api/v1/search' \
+                   --data-urlencode "q=$query" -d categories=010 -d purity=100 \
+                   -d sorting=favorites -d atleast=1920x1080 -d ratios=16x9) \
+            || { echo "✗ API Wallhaven injoignable" >&2; exit 1; }
+        while IFS=' ' read -r id url; do
+            urls+=("$url"); names+=("$slug-wallhaven-$id")
+        done < <(python3 -I -c '
+import json, re, sys
+n = int(sys.argv[1])
+for x in json.load(sys.stdin).get("data", []):
+    if n <= 0:
+        break
+    if x.get("file_size", 0) > 25 * 1024 * 1024:   # skip the huge ones
+        continue
+    url, wid = x.get("path", ""), x.get("id", "")
+    if url.startswith("https://") and re.fullmatch(r"[a-z0-9]+", wid):
+        print(wid, url)
+        n -= 1' "$count" <<< "$api")
+        (( ${#urls[@]} )) || { echo "Aucun résultat pour « $query »." >&2; exit 1; }
+        echo "󰍉  Wallhaven « $query » → ${#urls[@]} image(s)"
+        ;;
+    -f)
+        [[ -r ${2:-} ]] || { echo "Fichier illisible : ${2:-}" >&2; exit 1; }
+        while IFS= read -r line; do
+            line=${line%%#*}; line=${line//[[:space:]]/}
+            [[ -n $line ]] && { urls+=("$line"); names+=(""); }
+        done < "$2"
+        ;;
+    ''|-h|--help) usage ;;
+    *)
+        for u in "$@"; do urls+=("$u"); names+=(""); done
+        ;;
+esac
+(( ${#urls[@]} )) || usage
+
+stage=$(mktemp -d "${TMPDIR:-/tmp}/fetch-walls.XXXXXX")
+trap 'rm -rf "$stage"' EXIT
+ok=0 ko=0
+
+for i in "${!urls[@]}"; do
+    url=${urls[i]}
+    if [[ ! $url =~ ^https:// ]]; then
+        echo "✗ refusé (HTTPS uniquement) : $url"; ko=$((ko + 1)); continue
+    fi
+    name=${names[i]}
+    if [[ -z $name ]]; then
+        name=${url%%[?#]*}; name=${name##*/}; name=${name%.*}
+    fi
+    name=$(printf '%s' "$name" | tr -c 'A-Za-z0-9._-' '_' | cut -c1-120)
+    [[ -n $name && $name != . && $name != .. ]] || name="wall-$(date +%s%N)"
+    if compgen -G "$DEST/$name.*" >/dev/null; then
+        echo "• déjà présent : $name"; continue
+    fi
+    tmp="$stage/dl"
+    rm -f "$tmp"
+    if ! curl -fsSL --proto '=https' --proto-redir '=https' --tlsv1.2 \
+              --max-filesize 26214400 --max-time 60 --retry 2 \
+              -A "$UA" -o "$tmp" "$url"; then
+        echo "✗ téléchargement échoué : $url"; ko=$((ko + 1)); continue
+    fi
+    # Must really be an image (checked by decoding it, not by its extension).
+    if ! ext=$(python3 -I -c '
+import sys
+from PIL import Image
+with Image.open(sys.argv[1]) as im:
+    im.verify()
+    fmt = im.format
+print({"JPEG": "jpg", "PNG": "png", "WEBP": "webp"}[fmt])' "$tmp" 2>/dev/null); then
+        echo "✗ pas une image valide : $url"; ko=$((ko + 1)); continue
+    fi
+    install -m 644 "$tmp" "$DEST/$name.$ext"
+    echo "✓ $name.$ext"
+    ok=$((ok + 1))
+done
+
+echo "→ $ok ajoutée(s), $ko échec(s) — dans $DEST"
+(( ok > 0 )) && echo "   (lance \`hub --rebuild\` ou \`hub\` pour les voir dans le hub 3D)"
+(( ko == 0 ))

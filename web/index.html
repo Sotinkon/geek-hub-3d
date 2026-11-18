@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- Local-only page: scripts from this server + the pinned Three.js CDN, nothing else. -->
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self'; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>Shinobi Geek Hub</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="booting">
+  <canvas id="scene" aria-label="Hub 3D : particules, grille cybernétique et cartes flottantes"></canvas>
+
+  <header class="hud hud-top">
+    <div class="brand" aria-label="Shinobi Geek Hub">
+      <span class="brand-mark">◢</span> SHINOBI<span class="brand-sep">//</span>HUB
+    </div>
+    <nav class="crumbs" id="crumbs" aria-label="Chemin" hidden></nav>
+    <div class="stats" aria-live="off">
+      <span id="clock">--:--:--</span>
+      <span class="dot">•</span>
+      <span id="fps">-- fps</span>
+      <span class="dot">•</span>
+      <span id="count">0 cartes</span>
+    </div>
+  </header>
+
+  <section class="title" id="title" aria-hidden="true">
+    <p class="kicker" id="kicker">Introducing</p>
+    <h1><span class="t-geek" id="titleMain">Geek</span> <span class="t-hub" id="titleAccent">Hub</span></h1>
+    <p class="slogan"><span id="slogan"></span><span class="caret">▍</span></p>
+  </section>
+
+  <aside class="tree-panel" id="treePanel" aria-label="Arborescence" hidden>
+    <div class="tree-head">
+      <span>tree</span>
+      <button type="button" id="treeClose" aria-label="Masquer l'arborescence">T ✕</button>
+    </div>
+    <div class="tree-body" id="treeBody"></div>
+  </aside>
+
+  <div class="hover-label" id="hoverLabel" aria-hidden="true"></div>
+
+  <aside class="focus-panel" id="focusPanel" aria-live="polite" hidden>
+    <div class="focus-meta">
+      <span class="focus-cat" id="focusCat"></span>
+      <span class="focus-index" id="focusIndex"></span>
+    </div>
+    <h2 id="focusTitle"></h2>
+    <div class="focus-body" id="focusBody"></div>
+    <div class="focus-actions">
+      <button type="button" id="prevBtn" aria-label="Carte précédente">←</button>
+      <span class="focus-extra" id="focusExtra"></span>
+      <button type="button" id="closeBtn" aria-label="Revenir à l'orbite">Esc · orbite</button>
+      <button type="button" id="nextBtn" aria-label="Carte suivante">→</button>
+    </div>
+  </aside>
+
+  <nav class="hud hud-bottom" aria-label="Filtres">
+    <span class="tabs" id="tabs"></span>
+    <input type="search" id="search" class="search" placeholder="/ rechercher…" aria-label="Rechercher une carte" autocomplete="off" spellcheck="false">
+    <span class="hint" id="hint">glisser : tourner · molette : zoom · espace : auto-orbite · Q : quitter</span>
+  </nav>
+
+  <div class="paused-chip" id="paused" aria-live="polite">⏸ pause · 0 % CPU/GPU</div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <div class="error" id="error" hidden></div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
